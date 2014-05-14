@@ -3,8 +3,9 @@ node-fidonet-mailer-binkp
 
 [![Build Status](https://travis-ci.org/askovpen/node-fidonet-mailer-binkp.svg?branch=master)](https://travis-ci.org/askovpen/node-fidonet-mailer-binkp)
 
+[![(npm package version)](https://nodei.co/npm/fidonet-mailer-binkp.png?downloads=true)](https://npmjs.org/package/fidonet-mailer-binkp)
+
 this is alpha.
-now only client.
 
 ## Usage
 
