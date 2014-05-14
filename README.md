@@ -18,12 +18,12 @@ var myinfo={
     'nodeinfo':'NDL',
     'address':['2:5020/9696.777','10:10/10.10']
 };
-var remoteinfo={
+var remoteinfo={'2:5020/9696.0': {
     'address':'2:5020/9696.0',
     'password':'supersecretpasswordhuyugadaesh',
     'host':'127.0.0.1'
-};
-var files=[
+}};
+var files={'2:5020/9696.0': [
     {
         'filename':path.join(__dirname,'/out/test.txt'),
         'size':6,
@@ -38,15 +38,18 @@ var files=[
         'prio':'c',
         'bundle':null
     }
-];
+]};
 var inbound=path.join(__dirname,'/in');
 
         var options=null;
-        var client=BinkPc(myinfo,remoteinfo,files,inbound,options);
+        var client=BinkPc(myinfo,remoteinfo,files,inbound,0);
         client.on('auth',function(data){
             console.log(data);
         });
         client.start(function(err){
         	console.log('end');
         });
+
+        var server=BinkPc(myinfo,remoteinfo,files,inbound,1);
+        server.on('auth',function(data){console.log(data);}
 ```
