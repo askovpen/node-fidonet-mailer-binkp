@@ -115,6 +115,13 @@ BinkPc.prototype.send=function(self,socket){
 };
 BinkPc.prototype.sendFile=function(self,socket){
 //	console.log(self.files[self.connection[socket].remote_addr]);
+	if (self.files[self.connection[socket].remote_addr].length>0) {
+		if (!fs.existsSync(self.files[self.connection[socket].remote_addr][0].filename)) {
+			console.log(self.files[self.connection[socket].remote_addr][0].filename+' not found');
+			self.files[self.connection[socket].remote_addr].splice(0,1);
+			self.sendFile(self,socket);
+		}
+	}
 	if (self.files[self.connection[socket].remote_addr].length>0){
 		console.log('want send');
 //		self.connection[socket].sprogress=0;
@@ -204,7 +211,23 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 					if (self.files[self.connection[socket].remote_addr].length>0){
 						if (path.basename(self.files[self.connection[socket].remote_addr][0].filename)==data.toString(null,i,i+len-1).split(' ')[0]){
 //									fs.closeSync(self.sfileFD);
-							console.log(self.files[self.connection[socket].remote_addr][0].filename+' skipped');
+							console.log(self.files[self.connection[socket].remote_addr][0].filename+' sended');
+							if (self.files[self.connection[socket].remote_addr][0].kknd=='^' ||
+								self.files[self.connection[socket].remote_addr][0].kknd==' '
+								){
+								fs.unlinkSync(self.files[self.connection[socket].remote_addr][0].filename);
+							}
+							if (self.files[self.connection[socket].remote_addr][0].kknd=='#') {
+								fs.truncateSync(self.files[self.connection[socket].remote_addr][0].filename,0);
+							}
+							if (self.files[self.connection[socket].remote_addr][0].bundle!==null){
+								var flodata=fs.readFileSync(self.files[self.connection[socket].remote_addr][0].bundle);
+								var re = new RegExp('((?:[\\n\\r]|.)*).('+self.files[self.connection[socket].remote_addr][0].filename+')((?:[\\n\\r]))');
+								var res=flodata.toString().match(re);
+								if (res!==null){
+									fs.writeFileSync(self.files[self.connection[socket].remote_addr][0].bundle,res[1]+res[3]);
+								}
+							}
 							self.files[self.connection[socket].remote_addr].splice(0,1);
 							if (self.files[self.connection[socket].remote_addr].length>0){
 								self.sendFile(self,socket);
