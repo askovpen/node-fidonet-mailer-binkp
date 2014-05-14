@@ -14,6 +14,6 @@
 		"url": "https://github.com/askovpen/node-fidonet-mailer-binkp.git"
 	},
 	"scripts": {
-		"pretest": "jshint fidonet-mailer-binkp.js",
+		"pretest": "jshint fidonet-mailer-binkp.js"
 	}
 }
