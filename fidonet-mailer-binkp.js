@@ -16,10 +16,10 @@ var BinkPc=function(myinfo,remoteinfo,files,inbound,mode){
 	process.EventEmitter.call(this);
 };
 util.inherits(BinkPc, process.EventEmitter);
-BinkPc.prototype.server=function(callback){
+BinkPc.prototype.server=function(port,callback){
 	var self=this;
 	var srv = net.createServer(function(socket) {
-		console.log('server connected');
+		console.log('connected '+socket.remoteAddress+':'+socket.remotePort);
 		self.connection[socket]={};
 		self.connection[socket].rgain={};
 		self.connection[socket].rgain.addr=[];
@@ -33,12 +33,13 @@ BinkPc.prototype.server=function(callback){
 			self.onRead(self,data,callback,socket);
 		});
 		 socket.on('end', function () {
+			console.log('disconnected');
 			delete(self.connection[socket]);
 //		 clients.splice(clients.indexOf(socket), 1);
 //		 broadcast(socket.name + " left the chat.\n");
 		 });
 	});
-	srv.listen(24555);
+	srv.listen(port);
 };
 BinkPc.prototype.start=function(callback){
 	self=this;
@@ -82,7 +83,9 @@ BinkPc.prototype.Address_equal=function(addr1,addr2){
 	return false;
 };
 BinkPc.prototype.send=function(self,socket){
+	console.log('send');
 	while(self.connection[socket].sprogress<self.files[self.connection[socket].remote_addr][0].size){
+//		console.log(self.connection[socket].sprogress);
 		var buf;
 		if (self.files[self.connection[socket].remote_addr][0].size-self.connection[socket].sprogress>4096){
 			buf=new Buffer(4098);
@@ -96,8 +99,8 @@ BinkPc.prototype.send=function(self,socket){
 			fs.readSync(self.connection[socket].sfileFD,buf,2,self.files[self.connection[socket].remote_addr][0].size-self.connection[socket].sprogress,self.connection[socket].sprogress);
 			console.log(self.files[self.connection[socket].remote_addr][0].filename+' sended');
 			socket.write(buf);
-			console.log(buf);
-			console.log(buf.length);
+//			console.log(buf);
+//			console.log(buf.length);
 			fs.closeSync(self.connection[socket].sfileFD);
 			self.connection[socket].sprogress=self.files[self.connection[socket].remote_addr][0].size;
 			self.files[self.connection[socket].remote_addr].splice(0,1);
@@ -111,7 +114,7 @@ BinkPc.prototype.send=function(self,socket){
 	}
 };
 BinkPc.prototype.sendFile=function(self,socket){
-	console.log(self.files[self.connection[socket].remote_addr]);
+//	console.log(self.files[self.connection[socket].remote_addr]);
 	if (self.files[self.connection[socket].remote_addr].length>0){
 		console.log('want send');
 //		self.connection[socket].sprogress=0;
@@ -121,7 +124,7 @@ BinkPc.prototype.sendFile=function(self,socket){
 		buf[1]=tstr2.length+1;
 		buf[2]=3;
 		new Buffer(tstr2).copy(buf,3);
-		console.log('s3 '+buf.slice(3).toString());
+//		console.log('s3 '+buf.slice(3).toString());
 		socket.write(buf);
 	}else {
 //		self.client.write(new Buffer([128,1,5]));
@@ -130,8 +133,8 @@ BinkPc.prototype.sendFile=function(self,socket){
 BinkPc.prototype.onRead=function(self,data,callback,socket){
 		var i=0;
 		if (self.connection[socket].rcvBuf!==undefined){
-			console.log('buf');
-		console.log(self.connection[socket].rcvBuf);
+//			console.log('buf');
+//		console.log(self.connection[socket].rcvBuf);
 			data=Buffer.concat([self.connection[socket].rcvBuf,data]);
 			self.connection[socket].rcvBuf=undefined;
 		}
@@ -143,21 +146,24 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 				i++;
 				var type=data[i];
 				i++;
-				console.log('type: '+type+' len: '+len+' buf.len '+data.slice(i,i+len-1).length );
+//				console.log('type: '+type+' len: '+len+' buf.len '+data.slice(i,i+len-1).length );
 				if (data.slice(i,i+len-1).length<len-1){
 					self.connection[socket].rcvBuf=data.slice(i-3,i+len-1);
 				}
 				if (type===0) { //info
 					var str=data.toString(null,i,i+len-1);
 					self.connection[socket].rgain[str.substr(0,str.indexOf(' '))]=str.substr(str.indexOf(' ')+1,len-str.indexOf(' '));
-					if (str.substr(0,str.indexOf(' '))=='TRF'){self.emit('auth',self.connection[socket].rgain);
-						if (!self.mode){self.sendFile(self,socket);}
+					if (str.substr(0,str.indexOf(' '))=='TRF'){
+						if (!self.mode){
+							self.sendFile(self,socket);
+							self.emit('auth',self.connection[socket].rgain);
+						}
 					}
 				} else if (type==1) { //addrs
 					self.connection[socket].rgain.addr=self.connection[socket].rgain.addr.concat(data.toString(null,i,i+len-1).split(' '));
 //						console.log(data.toString(null,i,i+len-1).split(' '));
 				} else if (type==2) { //md5 answer
-					console.log(data.toString(null,i,i+len-1));
+//					console.log(data.toString(null,i,i+len-1));
 					if (self.mode) {
 						if (data.toString(null,i,i+len-1).substr(0,9)=='CRAM-MD5-'){
 //							console.log(self.rgain);
@@ -165,13 +171,13 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 						}
 					}
 				} else if (type==4) { //secure answer
-					console.log(data.toString(null,i,i+len-1));
+//					console.log(data.toString(null,i,i+len-1));
 					if (data.toString(null,i,i+len-1)!='secure') {
 //							callback('password wrong');
 					}
 				} else if (type==3) { //file set
 					self.connection[socket].file=data.toString(null,i,i+len-1).split(' ');
-						console.log('3 '+data.toString(null,i,i+len-1));
+//						console.log('3 '+data.toString(null,i,i+len-1));
 					if (self.connection[socket].file[3]=='-1') {
 						self.connection[socket].fileFD=fs.openSync(self.inbound+'/'+self.connection[socket].file[0],'w');
 						var answer=new Buffer(data.toString(null,i,i+len-1).length+2);
@@ -180,7 +186,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 						answer[2]=9;
 						self.connection[socket].progress=self.connection[socket].file[1];
 						new Buffer(self.connection[socket].file[0]+' '+self.connection[socket].file[1]+' '+self.connection[socket].file[2]+' 0').copy(answer,3);
-							console.log('s9 '+answer.slice(3).toString());
+//							console.log('s9 '+answer.slice(3).toString());
 						socket.write(answer);
 					}else if (self.connection[socket].file[3]=='0') {
 						self.stage=2;
@@ -194,7 +200,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 						socket.write(new Buffer([128,1,5]));
 					}
 				} else if (type==6) {
-					console.log('6 '+data.toString(null,i,i+len-1));
+//					console.log('6 '+data.toString(null,i,i+len-1));
 					if (self.files[self.connection[socket].remote_addr].length>0){
 						if (path.basename(self.files[self.connection[socket].remote_addr][0].filename)==data.toString(null,i,i+len-1).split(' ')[0]){
 //									fs.closeSync(self.sfileFD);
@@ -216,16 +222,18 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 				} else if (type==8) {
 					callback(data.toString(null,i,i+len-1));
 				} else if (type==9) {
-					console.log('9 '+data.toString(null,i,i+len-1));
+//					console.log('9 '+data.toString(null,i,i+len-1));
 					var sfile=data.toString(null,i,i+len-1).split(' ');
-					console.log(self.files);
-					if (sfile[3]=='0'){
+//					console.log(self.files);
+//					console.log(sfile[3]);
+					if (sfile[3]>=0 && sfile[3]<=self.files[self.connection[socket].remote_addr][0].size){
+						self.connection[socket].sprogress=parseInt(sfile[3]);
 						self.connection[socket].sfileFD=fs.openSync(self.files[self.connection[socket].remote_addr][0].filename,'r');
 						var answer3=new Buffer(len+2);
 						answer3[0]=128;
 						answer3[1]=data.toString(null,i,i+len-1).length+1;
 						answer3[2]=3;
-						new Buffer(sfile[0]+' '+sfile[1]+' '+sfile[2]+' 0').copy(answer3,3);
+						new Buffer(sfile[0]+' '+sfile[1]+' '+sfile[2]+' '+sfile[3]).copy(answer3,3);
 						socket.write(answer3);
 //						console.log(answer3);
 //							console.log(answer3.toString());
@@ -311,7 +319,14 @@ BinkPc.prototype.checkPasswd=function(self,hash,socket){
 			if (hmac.digest('hex')==hash){
 				console.log('auth!!!');
 				self.connection[socket].remote_addr=self.nAddress(addr);
+				self.emit('auth',self.connection[socket].rgain);
 				socket.write(new Buffer([128,1,4]));
+				var trf=0;
+				self.files[self.connection[socket].remote_addr].forEach(function(file){
+					trf+=file.size;
+				});
+				socket.write(self.makePkt(self,'TRF','0 '+trf));
+				socket.write(self.makePkt(self,'OPT','NDA NR BM'));
 			}
 		}
 	});

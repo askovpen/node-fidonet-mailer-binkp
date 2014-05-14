@@ -52,4 +52,5 @@ var inbound=path.join(__dirname,'/in');
 
         var server=BinkPc(myinfo,remoteinfo,files,inbound,1);
         server.on('auth',function(data){console.log(data);}
+		server.server(24554,function(err){console.log(err);});
 ```
