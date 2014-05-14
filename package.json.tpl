@@ -1,25 +1,19 @@
 {
 	"name": "fidonet-mailer-binkp",
 	"main": "fidonet-mailer-binkp.js",
-	"version": "0.0.1",
+	"version": "@@ver",
 	"description": "Fidonet Binkp client",
-	"keywords": ["Fidonet", "Fido", "mailer", "binkp", "client"],
+	"keywords": ["Fidonet", "Fido", "mailer","binkp"],
 	"author": { "name": "Alexander N. Skovpen" },
 	"dependencies": {
 	},
 	"devDependencies": {
-		"gulp": ">0.0.0",
-		"gulp-replace": ">0.0.0",
-		"gulp-jshint": ">0.0.0",
-		"gulp-rename": ">0.0.0",
-		"jshint-stylish": ">0.0.0"
 	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/askovpen/node-fidonet-mailer-binkp.git"
 	},
 	"scripts": {
-		"pretest": "jshint fidonet-mailer-binkp.js test/test.js",
-		"test": "mocha --reporter spec --timeout 60s"
+		"pretest": "jshint fidonet-mailer-binkp.js",
 	}
 }
