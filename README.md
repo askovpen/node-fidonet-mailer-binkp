@@ -1,7 +1,7 @@
 node-fidonet-mailer-binkp
 =========================
 
-node-fidonet-mailer-binkp
+[![Build Status](https://travis-ci.org/askovpen/node-fidonet-mailer-binkp.svg?branch=master)](https://travis-ci.org/askovpen/node-fidonet-mailer-binkp)
 
 this is alpha.
 now only client.
