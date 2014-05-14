@@ -14,7 +14,7 @@
 		"url": "https://github.com/askovpen/node-fidonet-mailer-binkp-client.git"
 	},
 	"scripts": {
-		"pretest": "jshint fidonet-mailer-binkp-client.js test/test.js",
+		"pretest": "jshint fidonet-mailer-binkp.js test/test.js",
 		"test": "mocha --reporter spec --timeout 60s"
 	}
 }
