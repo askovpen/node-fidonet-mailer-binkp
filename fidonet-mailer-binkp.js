@@ -2,6 +2,7 @@
 var net=require('net');
 var fs=require('fs');
 var crypto=require('crypto');
+var crypt=require('fidonet-mailer-binkp-crypt');
 var util=require('util');
 var path=require('path');
 var BinkPc=function(myinfo,remoteinfo,files,inbound,mode){
@@ -26,6 +27,7 @@ BinkPc.prototype.server=function(port,callback){
 		self.connection[socket].remote_done=false;
 		self.connection[socket].progress=0;
 		self.connection[socket].chunk=0;
+		self.connection[socket].crypt=false;
 		self.connection[socket].sprogress=0;
 		self.connection[socket].challenge=crypto.pseudoRandomBytes(10).toString('hex');
 		self.makeAnswer(self,callback,socket);
@@ -50,6 +52,7 @@ BinkPc.prototype.start=function(callback){
 	self.connection[client].sprogress=0;
 	self.connection[client].chunk=0;
 	self.connection[client].rgain={};
+	self.connection[client].crypt=false;
 	self.connection[client].rgain.addr=[];
 	client.on('data',function(data){
 		self.onRead(self,data,callback,client);
@@ -91,14 +94,14 @@ BinkPc.prototype.send=function(self,socket){
 			buf=new Buffer(4098);
 			buf.writeUInt16BE(4096,0);
 			fs.readSync(self.connection[socket].sfileFD,buf,2,4096,self.connection[socket].sprogress);
-			socket.write(buf);
+			self.send(self,socket,buf);
 			self.connection[socket].sprogress+=4096;
 		} else {
 			buf=new Buffer(self.files[self.connection[socket].remote_addr][0].size-self.connection[socket].sprogress+2);
 			buf.writeUInt16BE(self.files[self.connection[socket].remote_addr][0].size-self.connection[socket].sprogress,0);
 			fs.readSync(self.connection[socket].sfileFD,buf,2,self.files[self.connection[socket].remote_addr][0].size-self.connection[socket].sprogress,self.connection[socket].sprogress);
 			console.log(self.files[self.connection[socket].remote_addr][0].filename+' sended');
-			socket.write(buf);
+			self.send(self,socket,buf);
 //			console.log(buf);
 //			console.log(buf.length);
 			fs.closeSync(self.connection[socket].sfileFD);
@@ -106,7 +109,7 @@ BinkPc.prototype.send=function(self,socket){
 			self.files[self.connection[socket].remote_addr].splice(0,1);
 			if (self.files[self.connection[socket].remote_addr].length===0){
 				if (self.connection[socket].remote_done){
-					socket.write(new Buffer([128,1,5]));
+					self.send(self,socket,new Buffer([128,1,5]));
 				}
 			}
 			return;
@@ -132,12 +135,18 @@ BinkPc.prototype.sendFile=function(self,socket){
 		buf[2]=3;
 		new Buffer(tstr2).copy(buf,3);
 //		console.log('s3 '+buf.slice(3).toString());
-		socket.write(buf);
+		self.send(self,socket,buf);
 	}else {
 //		self.client.write(new Buffer([128,1,5]));
 	}
 };
 BinkPc.prototype.onRead=function(self,data,callback,socket){
+		if (self.connection[socket].crypt){
+//			console.log(data);
+//			self.connection[socket].keyin.init_keys();
+			self.connection[socket].decrypted=true;
+			data=self.connection[socket].keyin.decrypt_buf(data);
+		}
 		var i=0;
 		if (self.connection[socket].rcvBuf!==undefined){
 //			console.log('buf');
@@ -146,6 +155,13 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 			self.connection[socket].rcvBuf=undefined;
 		}
 		while (i<data.length){
+			if (self.connection[socket].crypt && !self.connection[socket].decrypted){
+				console.log('!!!');
+//				self.connection[socket].keyin.init_keys();
+				data=self.connection[socket].keyin.decrypt_buf(data.slice(i));
+//				console.log(data);
+				i=0;
+			}
 			var len;
 			if (data[i]==128){
 				i++;
@@ -161,10 +177,6 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 					var str=data.toString(null,i,i+len-1);
 					self.connection[socket].rgain[str.substr(0,str.indexOf(' '))]=str.substr(str.indexOf(' ')+1,len-str.indexOf(' '));
 					if (str.substr(0,str.indexOf(' '))=='TRF'){
-						if (!self.mode){
-							self.sendFile(self,socket);
-							self.emit('auth',self.connection[socket].rgain);
-						}
 					}
 				} else if (type==1) { //addrs
 					self.connection[socket].rgain.addr=self.connection[socket].rgain.addr.concat(data.toString(null,i,i+len-1).split(' '));
@@ -179,6 +191,15 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 					}
 				} else if (type==4) { //secure answer
 //					console.log(data.toString(null,i,i+len-1));
+					if (!self.mode){
+						if (self.connection[socket].rgain.OPT.search(/CRYPT/)){
+							self.connection[socket].crypt=true;
+						}
+						if (!self.mode){
+							self.sendFile(self,socket);
+							self.emit('auth',self.connection[socket].rgain);
+						}
+					}
 					if (data.toString(null,i,i+len-1)!='secure') {
 //							callback('password wrong');
 					}
@@ -194,7 +215,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 						self.connection[socket].progress=self.connection[socket].file[1];
 						new Buffer(self.connection[socket].file[0]+' '+self.connection[socket].file[1]+' '+self.connection[socket].file[2]+' 0').copy(answer,3);
 //							console.log('s9 '+answer.slice(3).toString());
-						socket.write(answer);
+						self.send(self,socket,answer);
 					}else if (self.connection[socket].file[3]=='0') {
 						self.stage=2;
 					}
@@ -204,7 +225,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 					if (self.files[self.connection[socket].remote_addr].length>0) {
 						self.sendFile(self,socket);
 					} else {
-						socket.write(new Buffer([128,1,5]));
+						self.send(self,socket,new Buffer([128,1,5]));
 					}
 				} else if (type==6) {
 //					console.log('6 '+data.toString(null,i,i+len-1));
@@ -233,13 +254,13 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 								self.sendFile(self,socket);
 							}else {
 								if (self.connection[socket].remote_done){
-									socket.write(new Buffer([128,1,5]));
+									self.send(self,socket,new Buffer([128,1,5]));
 								}
 							}
 						}
 					}else {
 								if (self.connection[socket].remote_done){
-									socket.write(new Buffer([128,1,5]));
+									self.send(self,socket,new Buffer([128,1,5]));
 								}
 					}
 				} else if (type==8) {
@@ -257,7 +278,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 						answer3[1]=data.toString(null,i,i+len-1).length+1;
 						answer3[2]=3;
 						new Buffer(sfile[0]+' '+sfile[1]+' '+sfile[2]+' '+sfile[3]).copy(answer3,3);
-						socket.write(answer3);
+						self.send(self,socket,answer3);
 //						console.log(answer3);
 //							console.log(answer3.toString());
 //							console.log(sfile[0]+' '+sfile[1]+' '+sfile[2]+' 1');
@@ -268,12 +289,15 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 				}
 				i=i+len-1;
 			} else {
+
 //					console.log('fail');
 //					callback();
 //				}
 //				i=i+len-1;
 //			}else if (self.stage==2){
-//				console.log(data);
+
+//				console.log(data.slice(i));
+
 			var str2;
 			var answer2;
 			if (data.length-2==self.connection[socket].file[1]) {
@@ -287,7 +311,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 				answer2[2]=6;
 				new Buffer(str2).copy(answer2,3);
 //					console.log(answer2);
-				socket.write(answer2);
+				self.send(self,socket,answer2);
 				self.stage=1;
 				i=data.length;
 			} else {
@@ -321,7 +345,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 					answer2[1]=str2.length+1;
 					answer2[2]=6;
 					new Buffer(str2).copy(answer2,3);
-					socket.write(answer2);
+					self.send(self,socket,answer2);
 					self.stage=1;
 				}
 			}
@@ -343,13 +367,20 @@ BinkPc.prototype.checkPasswd=function(self,hash,socket){
 				console.log('auth!!!');
 				self.connection[socket].remote_addr=self.nAddress(addr);
 				self.emit('auth',self.connection[socket].rgain);
-				socket.write(new Buffer([128,1,4]));
 				var trf=0;
 				self.files[self.connection[socket].remote_addr].forEach(function(file){
 					trf+=file.size;
 				});
-				socket.write(self.makePkt(self,'TRF','0 '+trf));
-				socket.write(self.makePkt(self,'OPT','NDA NR BM'));
+				self.send(self,socket,self.makePkt(self,'TRF','0 '+trf));
+				self.send(self,socket,self.makePkt(self,'OPT','NDA NR BM CRYPT'));
+				self.send(self,socket,new Buffer([128,1,4]));
+				self.connection[socket].keyin=crypt(self.remoteinfo[self.connection[socket].remote_addr].password);
+				self.connection[socket].keyin.init_keys();
+				self.connection[socket].keyout=crypt('-'+self.remoteinfo[self.connection[socket].remote_addr].password);
+				self.connection[socket].keyout.init_keys();
+				if (self.connection[socket].rgain.OPT.search(/CRYPT/)){
+					self.connection[socket].crypt=true;
+				}
 			}
 		}
 	});
@@ -404,7 +435,7 @@ BinkPc.prototype.makeAnswer=function(self,callback,socket){
 	buf=Buffer.concat([buf,self.makePkt(self,'NDL',self.myinfo.nodeinfo)]);
 	buf=Buffer.concat([buf,self.makePkt(self,'VER','nbinkp/0.0.1 binkp/1.1')]);
 	if (!self.mode) {
-		buf=Buffer.concat([buf,self.makePkt(self,'OPT','NDA NR BM')]);
+		buf=Buffer.concat([buf,self.makePkt(self,'OPT','NDA NR BM CRYPT')]);
 		var trf=0;
 		console.log(self.connection[socket].remote_addr);
 		self.files[self.connection[socket].remote_addr].forEach(function(file){
@@ -418,9 +449,19 @@ BinkPc.prototype.makeAnswer=function(self,callback,socket){
 	new Buffer(self.myinfo.address.join(' ')).copy(addb,3);
 	buf=Buffer.concat([buf,addb]);
 	if (!self.mode) {
+		self.connection[socket].keyin=crypt('-'+self.remoteinfo[self.connection[socket].remote_addr].password);
+		self.connection[socket].keyin.init_keys();
+		self.connection[socket].keyout=crypt(self.remoteinfo[self.connection[socket].remote_addr].password);
+		self.connection[socket].keyout.init_keys();
 		buf=Buffer.concat([buf,self.hashPWD(self,callback,socket)]);
 	}
-	socket.write(buf);
+	self.send(self,socket,buf);
 	self.stage=1;
+};
+BinkPc.prototype.send=function(self,socket,data) {
+	if (self.connection[socket].crypt){
+		data=self.connection[socket].keyout.encrypt_buf(data);
+	}
+	socket.write(data);
 };
 module.exports=BinkPc;

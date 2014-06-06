@@ -6,6 +6,7 @@
 	"keywords": ["Fidonet", "Fido", "mailer", "binkp", "client"],
 	"author": { "name": "Alexander N. Skovpen" },
 	"dependencies": {
+		"fidonet-mailer-binkp-crypt":">0.0.0"
 	},
 	"devDependencies": {
 		"gulp": ">0.0.0",
