@@ -289,7 +289,7 @@ BinkPc.prototype.onRead=function(self,data,callback,socket){
 				}
 				i=i+len-1;
 			} else {
-
+//				console.log(data);
 //					console.log('fail');
 //					callback();
 //				}
